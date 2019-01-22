@@ -1271,7 +1271,7 @@ class Hydra extends EventEmitter {
               method: parsedRoute.httpMethod.toUpperCase()
             };
             let preHeaders = {};
-            if (options.method === 'POST' || options.method === 'PUT' || options.method === 'PATCH') {
+            if (options.method === 'POST' || options.method === 'PUT' || options.method === 'PATCH' || options.method === 'DELETE') {
               preHeaders['content-type'] = 'application/json';
             }
             options.headers = Object.assign(preHeaders, umfmsg.headers);
