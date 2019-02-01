@@ -580,6 +580,8 @@ class Hydra extends EventEmitter {
    * @return {object} Promise - resolving or rejecting
    */
   _registerRoutes(routes) {
+    console.log('_registerRoutes in hydra called.');
+
     return new Promise((resolve, reject) => {
       if (!this.redisdb) {
         reject(new Error('No Redis connection'));
@@ -589,12 +591,14 @@ class Hydra extends EventEmitter {
         let routesKey = `${redisPreKey}:${this.serviceName}:service:routes`;
         let trans = this.redisdb.multi();
         [
-          `[get]/${this.serviceName}`,
-          `[get]/${this.serviceName}/`,
-          `[get]/${this.serviceName}/:rest`
+          `[get][secure:false]/${this.serviceName}`,
+          `[get][secure:false]/${this.serviceName}/`,
+          `[get][secure:false]/${this.serviceName}/:rest`
         ].forEach((pattern) => {
           routes.push(pattern);
         });
+        console.log('RECEIVED ROUTES!', routes);
+
         routes.forEach((route) => {
           trans.sadd(routesKey, route);
         });
@@ -603,7 +607,8 @@ class Hydra extends EventEmitter {
             reject(err);
           } else {
             return this._getRoutes()
-              .then((routeList) => {
+              .then((routeList) => { 
+                console.log('route list', routeList)
                 if (routeList.length) {
                   this.registeredRoutes = [];
                   routeList.forEach((route) => {
