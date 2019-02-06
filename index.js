@@ -650,14 +650,16 @@ class Hydra extends EventEmitter {
       let trans = this.redisdb.multi();
       let routesSecureKey = `${redisPreKey}:${this.serviceName}:service:routes:secure`;
 
-      trans.hmset(routesSecureKey, routesSecurityMap);
-      trans.exec((err, _result) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve();
-        }
-      });
+      this._flushRoutes(':service:routes:secure').then(() => {
+        trans.hmset(routesSecureKey, routesSecurityMap);
+        trans.exec((err, _result) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve();
+          }
+        });
+      }).catch(reject);
     });
   }
 
@@ -808,11 +810,12 @@ class Hydra extends EventEmitter {
   /**
    * @name _flushRoutes
    * @summary Delete's the services routes.
+   * @param {string} [postfix] - an optional key to flush
    * @return {object} Promise - resolving or rejection
    */
-  _flushRoutes() {
+  _flushRoutes(postfix = ':service:routes') {
     return new Promise((resolve, reject) => {
-      let routesKey = `${redisPreKey}:${this.serviceName}:service:routes`;
+      let routesKey = `${redisPreKey}:${this.serviceName}${postfix}`;
       this.redisdb.del(routesKey, (err, result) => {
         if (err) {
           reject(err);
