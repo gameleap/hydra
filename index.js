@@ -580,8 +580,6 @@ class Hydra extends EventEmitter {
    * @return {object} Promise - resolving or rejecting
    */
   _registerRoutes(routes) {
-    console.log('_registerRoutes in hydra called.');
-
     return new Promise((resolve, reject) => {
       if (!this.redisdb) {
         reject(new Error('No Redis connection'));
@@ -591,14 +589,12 @@ class Hydra extends EventEmitter {
         let routesKey = `${redisPreKey}:${this.serviceName}:service:routes`;
         let trans = this.redisdb.multi();
         [
-          `[get][secure:false]/${this.serviceName}`,
-          `[get][secure:false]/${this.serviceName}/`,
-          `[get][secure:false]/${this.serviceName}/:rest`
+          `[get]/${this.serviceName}`,
+          `[get]/${this.serviceName}/`,
+          `[get]/${this.serviceName}/:rest`
         ].forEach((pattern) => {
           routes.push(pattern);
         });
-        console.log('RECEIVED ROUTES!', routes);
-
         routes.forEach((route) => {
           trans.sadd(routesKey, route);
         });
@@ -607,8 +603,7 @@ class Hydra extends EventEmitter {
             reject(err);
           } else {
             return this._getRoutes()
-              .then((routeList) => { 
-                console.log('route list', routeList)
+              .then((routeList) => {
                 if (routeList.length) {
                   this.registeredRoutes = [];
                   routeList.forEach((route) => {
@@ -640,6 +635,33 @@ class Hydra extends EventEmitter {
   }
 
   /**
+   * @name _registerRoutesSecurityMap
+   * @summary Register routes type map
+   * @param {array} routesSecurityMap - map where the route is the key and the value is whether it's secure or not
+   * @return {object} Promise - resolving or rejecting
+   */
+  _registerRoutesSecurityMap(routesSecurityMap) {
+    return new Promise((resolve, reject) => {
+      if (!this.redisdb) {
+        reject(new Error('No Redis connection'));
+        return;
+      }
+
+      let trans = this.redisdb.multi();
+      let routesSecureKey = `${redisPreKey}:${this.serviceName}:service:routes:secure`;
+
+      trans.hmset(routesSecureKey, routesSecurityMap);
+      trans.exec((err, _result) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve();
+        }
+      });
+    });
+  }
+
+  /**
    * @name _getRoutes
    * @summary Retrieves a array list of routes
    * @param {string} serviceName - name of service to retrieve list of routes.
@@ -653,6 +675,29 @@ class Hydra extends EventEmitter {
     return new Promise((resolve, reject) => {
       let routesKey = `${redisPreKey}:${serviceName}:service:routes`;
       this.redisdb.smembers(routesKey, (err, result) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(result);
+        }
+      });
+    });
+  }
+
+    /**
+   * @name _getRoutesSecurity
+   * @summary Retrieves a map of routes security, where the key is the route and the value is a boolean
+   * @param {string} serviceName - name of service to retrieve list of routes.
+   *                 If param is undefined, then the current serviceName is used.
+   * @return {object} Promise - resolving to map of routes security or rejection
+   */
+  _getRoutesSecurity(serviceName) {
+    if (serviceName === undefined) {
+      serviceName = this.serviceName;
+    }
+    return new Promise((resolve, reject) => {
+      let routesKey = `${redisPreKey}:${serviceName}:service:routes:secure`;
+      this.redisdb.hgetall(routesKey, (err, result) => {
         if (err) {
           reject(err);
         } else {
@@ -684,6 +729,46 @@ class Hydra extends EventEmitter {
             let serviceName = segments[2];
             serviceNames.push(serviceName);
             promises.push(this._getRoutes(serviceName));
+          });
+          return Promise.all(promises);
+        })
+        .then((routes) => {
+          let resObj = {};
+          let idx = 0;
+          routes.forEach((routesList) => {
+            resObj[serviceNames[idx]] = routesList;
+            idx += 1;
+          });
+          resolve(resObj);
+        })
+        .catch((err) => {
+          reject(err);
+        });
+    });
+  }
+
+    /**
+   * @name _getAllServiceRoutesSecurity
+   * @summary Retrieve all service routes.
+   * @return {object} Promise - resolving to an object with keys and arrays of routes
+   */
+  _getAllServiceRoutesSecurity() {
+    return new Promise((resolve, reject) => {
+      if (!this.redisdb) {
+        let msg = 'No Redis connection';
+        this._logMessage('error', msg);
+        reject(new Error(msg));
+        return;
+      }
+      let promises = [];
+      let serviceNames = [];
+      this._getKeys('*:routes')
+        .then((serviceRoutes) => {
+          serviceRoutes.forEach((service) => {
+            let segments = service.split(':');
+            let serviceName = segments[2];
+            serviceNames.push(serviceName);
+            promises.push(this._getRoutesSecurity(serviceName));
           });
           return Promise.all(promises);
         })
@@ -2147,12 +2232,31 @@ class IHydra extends Hydra {
   }
 
   /**
+   * @name registerRoutesTypesMap
+   * @summary Register routes type map
+   * @param {array} routesSecurityMap - map where the route is the key and the value is whether it's secure or not
+   * @return {object} Promise - resolving or rejecting
+   */
+  registerRoutesSecurityMap(routesSecurityMap) {
+    return super._registerRoutesSecurityMap(routesSecurityMap);
+  }
+
+  /**
    * @name getAllServiceRoutes
    * @summary Retrieve all service routes.
    * @return {object} Promise - resolving to an object with keys and arrays of routes
    */
   getAllServiceRoutes() {
     return super._getAllServiceRoutes();
+  }
+
+  /**
+   * @name getAllServiceRoutesSecurity
+   * @summary Retrieve all service routes.
+   * @return {object} Promise - resolving to an object with keys and arrays of routes
+   */
+  getAllServiceRoutesSecurity() {
+    return super._getAllServiceRoutesSecurity();
   }
 
   /**
