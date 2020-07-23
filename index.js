@@ -1384,6 +1384,10 @@ class Hydra extends EventEmitter {
                 resolve(serverResponse.createResponseObject(res.statusCode, res));
               })
               .catch((err) => {
+                if (err.code === 'ECONNRESET') {
+                  return reject(this._createServerResponseWithReason(ServerResponse.HTTP_GATEWAY_TIMEOUT, `Request for ${instance.serviceName} has timed out`));
+                }
+
                 instanceList.shift();
                 if (instanceList.length === 0) {
                   this.emit('metric', `service:unavailable|${instance.serviceName}|${instance.instanceID}|${err.message}`);
